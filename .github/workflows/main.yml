@@ -1,6 +1,6 @@
 name: Build Water Sort Jungle - Signed Release APK
 
-"on":
+on:
   workflow_dispatch:
   push:
     branches:
@@ -15,273 +15,315 @@ jobs:
 
     steps:
 
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      - name: Find and Extract HTML Game ZIP
-        shell: bash
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
         run: |
-          set -e
-
-          echo "=========================================="
-          echo "FINDING HTML GAME ZIP"
-          echo "=========================================="
-
-          ZIP_FILE=$(find . -maxdepth 3 -type f -iname "*.zip" \
-            ! -path "./android-wrapper/*" | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: HTML ZIP not found."
-            echo "Repository files:"
-            find . -maxdepth 3 -type f | head -n 100
-            exit 1
-          fi
-
-          echo "GAME ZIP: $ZIP_FILE"
-
-          rm -rf extracted
-          mkdir -p extracted
-
-          unzip -q "$ZIP_FILE" -d extracted
-
-          echo "ZIP extracted successfully."
-
-      - name: Find index.html
-        shell: bash
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "FINDING GAME INDEX.HTML"
-          echo "=========================================="
-
-          INDEX_FILE=$(find extracted -type f \
-            \( -iname "index.html" -o -iname "index.htm" \) \
-            | head -n 1)
-
-          if [ -z "$INDEX_FILE" ]; then
-            echo "ERROR: index.html was not found."
-            echo ""
-            echo "Files found inside ZIP:"
-            find extracted -maxdepth 6 -type f | head -n 200
-            exit 1
-          fi
-
-          GAME_ROOT=$(dirname "$INDEX_FILE")
-
-          echo "INDEX FILE:"
-          echo "$INDEX_FILE"
-
-          echo "GAME ROOT:"
-          echo "$GAME_ROOT"
-
-          echo "GAME_ROOT=$GAME_ROOT" >> "$GITHUB_ENV"
-
-      - name: Create Fresh Android WebView Project
-        shell: bash
-        run: |
-          set -e
-
-          echo "=========================================="
-          echo "CREATING FRESH ANDROID PROJECT"
-          echo "=========================================="
-
-          rm -rf android-wrapper
-
-          mkdir -p \
-            android-wrapper/app/src/main/java/com/watersortjungle/app \
-            android-wrapper/app/src/main/res/values \
-            android-wrapper/app/src/main/assets
-
-          python3 -c "import base64; from pathlib import Path; Path('android-wrapper/settings.gradle').write_bytes(base64.b64decode('cGx1Z2luTWFuYWdlbWVudCB7CiAgICByZXBvc2l0b3JpZXMgewogICAgICAgIGdvb2dsZSgpCiAgICAgICAgbWF2ZW5DZW50cmFsKCkKICAgICAgICBncmFkbGVQbHVnaW5Qb3J0YWwoKQogICAgfQp9CgpkZXBlbmRlbmN5UmVzb2x1dGlvbk1hbmFnZW1lbnQgewogICAgcmVwb3NpdG9yaWVzTW9kZS5zZXQoUmVwb3NpdG9yaWVzTW9kZS5GQUlMX09OX1BST0pFQ1RfUkVQT1MpCiAgICByZXBvc2l0b3JpZXMgewogICAgICAgIGdvb2dsZSgpCiAgICAgICAgbWF2ZW5DZW50cmFsKCkKICAgIH0KfQoKcm9vdFByb2plY3QubmFtZSA9ICJXYXRlclNvcnRKdW5nbGUiCmluY2x1ZGUoIjphcHAiKQo='))"
-
-          python3 -c "import base64; from pathlib import Path; Path('android-wrapper/build.gradle').write_bytes(base64.b64decode('cGx1Z2lucyB7CiAgICBpZCAnY29tLmFuZHJvaWQuYXBwbGljYXRpb24nIHZlcnNpb24gJzguOC4yJyBhcHBseSBmYWxzZQp9Cg=='))"
-
-          python3 -c "import base64; from pathlib import Path; Path('android-wrapper/gradle.properties').write_bytes(base64.b64decode('b3JnLmdyYWRsZS5qdm1hcmdzPS1YbXgyMDQ4bSAtRGZpbGUuZW5jb2Rpbmc9VVRGLTgKYW5kcm9pZC51c2VBbmRyb2lkWD1mYWxzZQphbmRyb2lkLm5vblRyYW5zaXRpdmVSQ2xhc3M9dHJ1ZQo='))"
-
-          python3 -c "import base64; from pathlib import Path; Path('android-wrapper/app/build.gradle').write_bytes(base64.b64decode('cGx1Z2lucyB7CiAgICBpZCAnY29tLmFuZHJvaWQuYXBwbGljYXRpb24nCn0KCmFuZHJvaWQgewogICAgbmFtZXNwYWNlICdjb20ud2F0ZXJzb3J0anVuZ2xlLmFwcCcKICAgIGNvbXBpbGVTZGsgMzUKCiAgICBkZWZhdWx0Q29uZmlnIHsKICAgICAgICBhcHBsaWNhdGlvbklkICdjb20ud2F0ZXJzb3J0anVuZ2xlLmFwcCcKICAgICAgICBtaW5TZGsgMjMKICAgICAgICB0YXJnZXRTZGsgMzUKICAgICAgICB2ZXJzaW9uQ29kZSAxCiAgICAgICAgdmVyc2lvbk5hbWUgJzEuMCcKICAgIH0KCiAgICBzaWduaW5nQ29uZmlncyB7CiAgICAgICAgcmVsZWFzZSB7CiAgICAgICAgICAgIHN0b3JlRmlsZSBmaWxlKCcuLi93YXRlci1zb3J0LWp1bmdsZS1yZWxlYXNlLmprcycpCiAgICAgICAgICAgIHN0b3JlUGFzc3dvcmQgJ1dhdGVyU29ydFN0b3JlMjAyNiEnCiAgICAgICAgICAgIGtleUFsaWFzICd3YXRlci1zb3J0LWp1bmdsZScKICAgICAgICAgICAga2V5UGFzc3dvcmQgJ1dhdGVyU29ydEtleTIwMjYhJwogICAgICAgIH0KICAgIH0KCiAgICBidWlsZFR5cGVzIHsKICAgICAgICByZWxlYXNlIHsKICAgICAgICAgICAgbWluaWZ5RW5hYmxlZCBmYWxzZQogICAgICAgICAgICBzaWduaW5nQ29uZmlnIHNpZ25pbmdDb25maWdzLnJlbGVhc2UKICAgICAgICB9CiAgICB9Cn0K'))"
-
-          python3 -c "import base64; from pathlib import Path; Path('android-wrapper/app/src/main/AndroidManifest.xml').write_bytes(base64.b64decode('PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPG1hbmlmZXN0IHhtbG5zOmFuZHJvaWQ9Imh0dHA6Ly9zY2hlbWFzLmFuZHJvaWQuY29tL2Fway9yZXMvYW5kcm9pZCI+CgogICAgPHVzZXMtcGVybWlzc2lvbiBhbmRyb2lkOm5hbWU9ImFuZHJvaWQucGVybWlzc2lvbi5JTlRFUk5FVCIgLz4KCiAgICA8YXBwbGljYXRpb24KICAgICAgICBhbmRyb2lkOnRoZW1lPSJAc3R5bGUvQXBwVGhlbWUiCiAgICAgICAgYW5kcm9pZDpsYWJlbD0iV2F0ZXIgU29ydCBKdW5nbGUiCiAgICAgICAgYW5kcm9pZDp1c2VzQ2xlYXJ0ZXh0VHJhZmZpYz0idHJ1ZSIKICAgICAgICBhbmRyb2lkOmhhcmR3YXJlQWNjZWxlcmF0ZWQ9InRydWUiCiAgICAgICAgYW5kcm9pZDphbGxvd0JhY2t1cD0iZmFsc2UiCiAgICAgICAgYW5kcm9pZDpzdXBwb3J0c1J0bD0idHJ1ZSI+CgogICAgICAgIDxhY3Rpdml0eQogICAgICAgICAgICBhbmRyb2lkOm5hbWU9Ii5NYWluQWN0aXZpdHkiCiAgICAgICAgICAgIGFuZHJvaWQ6ZXhwb3J0ZWQ9InRydWUiPgogICAgICAgICAgICA8aW50ZW50LWZpbHRlcj4KICAgICAgICAgICAgICAgIDxhY3Rpb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLmludGVudC5hY3Rpb24uTUFJTiIgLz4KICAgICAgICAgICAgICAgIDxjYXRlZ29yeSBhbmRyb2lkOm5hbWU9ImFuZHJvaWQuaW50ZW50LmNhdGVnb3J5LkxBVU5DSEVSIiAvPgogICAgICAgICAgICA8L2ludGVudC1maWx0ZXI+CiAgICAgICAgPC9hY3Rpdml0eT4KCiAgICA8L2FwcGxpY2F0aW9uPgo8L21hbmlmZXN0Pgo='))"
-
-          python3 -c "import base64; from pathlib import Path; Path('android-wrapper/app/src/main/res/values/styles.xml').write_bytes(base64.b64decode('PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHJlc291cmNlcz4KICAgIDxzdHlsZSBuYW1lPSJBcHBUaGVtZSIgcGFyZW50PSJAYW5kcm9pZDpzdHlsZS9UaGVtZS5NYXRlcmlhbC5MaWdodC5Ob0FjdGlvbkJhciI+CiAgICAgICAgPGl0ZW0gbmFtZT0iYW5kcm9pZDp3aW5kb3dOb1RpdGxlIj50cnVlPC9pdGVtPgogICAgICAgIDxpdGVtIG5hbWU9ImFuZHJvaWQ6Zm9udEZhbWlseSI+c2FuczwvaXRlbT4KICAgICAgICA8aXRlbSBuYW1lPSJhbmRyb2lkOmNvbG9yQWNjZW50Ij4jMDAwMDAwPC9pdGVtPgogICAgPC9zdHlsZT4KPC9yZXNvdXJjZXM+Cg=='))"
-
-          python3 -c "import base64; from pathlib import Path; Path('android-wrapper/app/src/main/java/com/watersortjungle/app/MainActivity.java').write_bytes(base64.b64decode('cGFja2FnZSBjb20ud2F0ZXJzb3J0anVuZ2xlLmFwcDsKCmltcG9ydCBhbmRyb2lkLmFwcC5BY3Rpdml0eTsKaW1wb3J0IGFuZHJvaWQub3MuQnVuZGxlOwppbXBvcnQgYW5kcm9pZC53ZWJraXQuV2ViU2V0dGluZ3M7CmltcG9ydCBhbmRyb2lkLndlYmtpdC5XZWJWaWV3OwppbXBvcnQgYW5kcm9pZC53ZWJraXQuV2ViVmlld0NsaWVudDsKCnB1YmxpYyBjbGFzcyBNYWluQWN0aXZpdHkgZXh0ZW5kcyBBY3Rpdml0eSB7CiAgICBwcml2YXRlIFdlYlZpZXcgd2ViVmlldzsKCiAgICBAT3ZlcnJpZGUKICAgIHByb3RlY3RlZCB2b2lkIG9uQ3JlYXRlKEJ1bmRsZSBzYXZlZEluc3RhbmNlU3RhdGUpIHsKICAgICAgICBzdXBlci5vbkNyZWF0ZShzYXZlZEluc3RhbmNlU3RhdGUpOwoKICAgICAgICB3ZWJWaWV3ID0gbmV3IFdlYlZpZXcodGhpcyk7CiAgICAgICAgc2V0Q29udGVudFZpZXcod2ViVmlldyk7CgogICAgICAgIFdlYlNldHRpbmdzIHNldHRpbmdzID0gd2ViVmlldy5nZXRTZXR0aW5ncygpOwogICAgICAgIHNldHRpbmdzLnNldEphdmFTY3JpcHRFbmFibGVkKHRydWUpOwogICAgICAgIHNldHRpbmdzLnNldERvbVN0b3JhZ2VFbmFibGVkKHRydWUpOwogICAgICAgIHNldHRpbmdzLnNldERhdGFiYXNlRW5hYmxlZCh0cnVlKTsKICAgICAgICBzZXR0aW5ncy5zZXRBbGxvd0ZpbGVBY2Nlc3ModHJ1ZSk7CiAgICAgICAgc2V0dGluZ3Muc2V0QWxsb3dDb250ZW50QWNjZXNzKHRydWUpOwogICAgICAgIHNldHRpbmdzLnNldEFsbG93RmlsZUFjY2Vzc0Zyb21GaWxlVVJMcyh0cnVlKTsKICAgICAgICBzZXR0aW5ncy5zZXRBbGxvd1VuaXZlcnNhbEFjY2Vzc0Zyb21GaWxlVVJMcyh0cnVlKTsKICAgICAgICBzZXR0aW5ncy5zZXRNZWRpYVBsYXliYWNrUmVxdWlyZXNVc2VyR2VzdHVyZShmYWxzZSk7CiAgICAgICAgc2V0dGluZ3Muc2V0U3VwcG9ydFpvb20oZmFsc2UpOwogICAgICAgIHNldHRpbmdzLnNldEJ1aWx0SW5ab29tQ29udHJvbHMoZmFsc2UpOwogICAgICAgIHNldHRpbmdzLnNldERpc3BsYXlab29tQ29udHJvbHMoZmFsc2UpOwogICAgICAgIHNldHRpbmdzLnNldE1peGVkQ29udGVudE1vZGUoV2ViU2V0dGluZ3MuTUlYRURfQ09OVEVOVF9DT01QQVRJQklMSVRZX01PREUpOwoKICAgICAgICB3ZWJWaWV3LnNldFdlYlZpZXdDbGllbnQobmV3IFdlYlZpZXdDbGllbnQoKSk7CiAgICAgICAgd2ViVmlldy5sb2FkVXJsKCJmaWxlOi8vL2FuZHJvaWRfYXNzZXQvaW5kZXguaHRtbCIpOwogICAgfQoKICAgIEBPdmVycmlkZQogICAgcHVibGljIHZvaWQgb25CYWNrUHJlc3NlZCgpIHsKICAgICAgICBpZiAod2ViVmlldyAhPSBudWxsICYmIHdlYlZpZXcuY2FuR29CYWNrKCkpIHsKICAgICAgICAgICAgd2ViVmlldy5n'b64decode' if False else b''))"
-
-          # Copy the complete HTML game into the APK assets folder.
-          cp -a "$GAME_ROOT"/. android-wrapper/app/src/main/assets/
-
-          if [ ! -f android-wrapper/app/src/main/assets/index.html ]; then
-            echo "ERROR: index.html was not copied into APK assets."
-            exit 1
-          fi
-
-          echo "Game files copied into Android assets."
-
-          echo "=========================================="
-          echo "GAME FILE COUNT"
-          echo "=========================================="
-
-          find android-wrapper/app/src/main/assets -type f | wc -l
-
-      - name: Setup Android SDK
-        shell: bash
-        run: |
-          set -e
-
-          export ANDROID_SDK_ROOT="$HOME/android-sdk"
-          export ANDROID_HOME="$ANDROID_SDK_ROOT"
-
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-
-          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -f "$SDKMANAGER" ]; then
-            wget -q \
-              https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip \
-              -O /tmp/android-tools.zip
-
-            rm -rf /tmp/android-tools
-            mkdir -p /tmp/android-tools
-
-            unzip -q /tmp/android-tools.zip -d /tmp/android-tools
-
-            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-
-            cp -r \
-              /tmp/android-tools/cmdline-tools/* \
-              "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
-          fi
-
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
-
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-
           yes | sdkmanager --licenses >/dev/null || true
-
-          sdkmanager \
-            "platform-tools" \
+          sdkmanager "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-          echo "Android SDK ready."
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.10.2"
-
-      - name: Create Release Keystore
-        working-directory: android-wrapper
+      - name: Create Android project
         shell: bash
         run: |
           set -e
 
-          echo "=========================================="
-          echo "CREATING SIGNING KEY"
-          echo "=========================================="
+          rm -rf android-wrapper
 
-          rm -f water-sort-jungle-release.jks
+          mkdir -p android-wrapper/app/src/main/java/com/watersortjungle/app
+          mkdir -p android-wrapper/app/src/main/assets
+          mkdir -p android-wrapper/app/src/main/res/values
+
+          cat > android-wrapper/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "WaterSortJungle"
+          include(":app")
+          EOF
+
+          cat > android-wrapper/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.6.1' apply false
+          }
+          EOF
+
+          cat > android-wrapper/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          EOF
+
+          cat > android-wrapper/app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.watersortjungle.app'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.watersortjungle.app'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              signingConfigs {
+                  release {
+                      storeFile file("../../release-key.jks")
+                      storePassword "WaterSortJungleStore2026"
+                      keyAlias "watersort"
+                      keyPassword "WaterSortJungleStore2026"
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      shrinkResources false
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+
+          cat > android-wrapper/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:usesCleartextTraffic="true"
+                  android:theme="@style/AppTheme"
+                  android:label="Water Sort Jungle">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:screenOrientation="portrait"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > android-wrapper/app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+              <style name="AppTheme"
+                  parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:statusBarColor">#FFFFFF</item>
+                  <item name="android:navigationBarColor">#000000</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > android-wrapper/app/src/main/java/com/watersortjungle/app/MainActivity.java <<'EOF'
+          package com.watersortjungle.app;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+
+              private WebView webView;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  webView = new WebView(this);
+                  setContentView(webView);
+
+                  WebSettings settings = webView.getSettings();
+
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+                  settings.setAllowFileAccessFromFileURLs(true);
+                  settings.setAllowUniversalAccessFromFileURLs(true);
+
+                  settings.setSupportZoom(false);
+                  settings.setBuiltInZoomControls(false);
+                  settings.setDisplayZoomControls(false);
+
+                  webView.setWebViewClient(new WebViewClient());
+
+                  webView.loadUrl(
+                      "file:///android_asset/index.html"
+                  );
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+      - name: Find and extract HTML ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP_FILE=$(find . -maxdepth 3 -type f -iname "*.zip" \
+            ! -path "./android-wrapper/*" \
+            | head -n 1 || true)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: HTML ZIP not found."
+            exit 1
+          fi
+
+          echo "Using ZIP: $ZIP_FILE"
+
+          rm -rf website-files
+          mkdir -p website-files
+
+          unzip -o "$ZIP_FILE" -d website-files
+
+      - name: Put HTML game inside APK
+        shell: bash
+        run: |
+          set -e
+
+          INDEX_FILE=$(find website-files \
+            -type f -iname "index.html" | head -n 1 || true)
+
+          if [ -z "$INDEX_FILE" ]; then
+            echo "ERROR: index.html not found inside ZIP."
+            exit 1
+          fi
+
+          WEBSITE_ROOT=$(dirname "$INDEX_FILE")
+
+          echo "Game files found in: $WEBSITE_ROOT"
+
+          cp -R "$WEBSITE_ROOT"/. \
+            android-wrapper/app/src/main/assets/
+
+          test -f android-wrapper/app/src/main/assets/index.html
+
+          echo ""
+          echo "Files that will be included inside APK:"
+          find android-wrapper/app/src/main/assets -type f | sort
+
+      - name: Generate release signing key
+        shell: bash
+        run: |
+          set -e
 
           keytool -genkeypair \
-            -keystore water-sort-jungle-release.jks \
-            -storetype JKS \
-            -storepass "WaterSortStore2026!" \
-            -keypass "WaterSortKey2026!" \
-            -alias "water-sort-jungle" \
+            -v \
+            -keystore release-key.jks \
+            -alias watersort \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -dname "CN=Water Sort Jungle, OU=Mobile, O=Water Sort Jungle, L=India, ST=Uttar Pradesh, C=IN"
+            -storepass WaterSortJungleStore2026 \
+            -keypass WaterSortJungleStore2026 \
+            -dname "CN=Water Sort Jungle, OU=Mobile, O=Water Sort Jungle, L=India, ST=India, C=IN"
 
-          keytool -list \
-            -keystore water-sort-jungle-release.jks \
-            -storepass "WaterSortStore2026!" \
-            -alias "water-sort-jungle"
+          cp release-key.jks android-wrapper/release-key.jks
 
-          echo "KEYSTORE CREATED AND VERIFIED."
+          echo "Release signing key created."
 
-      - name: Build Signed Release APK
-        working-directory: android-wrapper
+      - name: Create Gradle wrapper
         shell: bash
         run: |
           set -e
 
-          echo "=========================================="
-          echo "BUILDING REAL SIGNED RELEASE APK"
-          echo "=========================================="
+          cd android-wrapper
+          gradle wrapper --gradle-version 8.7
 
-          gradle clean
-
-          gradle assembleRelease --stacktrace
-
-          echo "=========================================="
-          echo "APK OUTPUT"
-          echo "=========================================="
-
-          find app/build/outputs/apk -type f -name "*.apk" -print
-
-      - name: Copy Final APK
-        working-directory: android-wrapper
+      - name: Build signed Release APK
         shell: bash
         run: |
           set -e
 
-          APK_FILE=$(find app/build/outputs/apk/release \
-            -type f -name "*.apk" | head -n 1)
+          cd android-wrapper
 
-          if [ -z "$APK_FILE" ]; then
-            echo "ERROR: Real APK was not created."
-            exit 1
-          fi
+          chmod +x gradlew
 
-          mkdir -p release
+          ./gradlew clean assembleRelease --no-daemon
 
-          cp "$APK_FILE" \
-            release/Water-Sort-Jungle-Release-Signed.apk
-
-          echo "FINAL APK:"
-          ls -lh release/Water-Sort-Jungle-Release-Signed.apk
-
-      - name: Verify APK Is Real And Signed
-        working-directory: android-wrapper
+      - name: Copy final APK
         shell: bash
         run: |
           set -e
 
-          APK="release/Water-Sort-Jungle-Release-Signed.apk"
+          cp android-wrapper/app/build/outputs/apk/release/app-release.apk \
+            Water-Sort-Jungle-Release-Signed.apk
 
-          if [ ! -s "$APK" ]; then
-            echo "ERROR: APK file is empty or missing."
-            exit 1
-          fi
+          echo "=========================================="
+          echo "SIGNED RELEASE APK CREATED"
+          echo "=========================================="
 
-          echo "APK size:"
-          ls -lh "$APK"
+          ls -lh Water-Sort-Jungle-Release-Signed.apk
 
-          echo "Checking APK file type:"
-          file "$APK"
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -e
 
-          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-
-          "$APKSIGNER" verify \
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify \
             --verbose \
-            "$APK"
+            Water-Sort-Jungle-Release-Signed.apk
 
-          echo "=========================================="
-          echo "REAL SIGNED APK VERIFIED"
-          echo "=========================================="
-
-      - name: Upload ONLY Final APK
+      - name: Upload final signed APK
         uses: actions/upload-artifact@v4
         with:
           name: Water-Sort-Jungle-Release-Signed-APK
-          path: android-wrapper/release/Water-Sort-Jungle-Release-Signed.apk
+          path: Water-Sort-Jungle-Release-Signed.apk
           if-no-files-found: error
-          retention-days: 30
+
+      - name: Upload signing key backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: Water-Sort-Jungle-Signing-Key-BACKUP
+          path: release-key.jks
+          if-no-files-found: error
