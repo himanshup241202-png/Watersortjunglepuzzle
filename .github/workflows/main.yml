@@ -15,7 +15,7 @@ jobs:
 
     steps:
 
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -24,13 +24,30 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK
+      - name: Prepare Android SDK
+        shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" \
+          set -e
+
+          echo "=========================================="
+          echo "ANDROID SDK"
+          echo "=========================================="
+
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -name sdkmanager | sort | tail -n 1)
+
+          echo "Using sdkmanager:"
+          echo "$SDKMANAGER"
+
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+
+          "$SDKMANAGER" \
+            "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
@@ -38,6 +55,10 @@ jobs:
         shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "CREATING ANDROID PROJECT"
+          echo "=========================================="
 
           rm -rf android-wrapper
 
@@ -56,6 +77,7 @@ jobs:
 
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+
               repositories {
                   google()
                   mavenCentral()
@@ -84,6 +106,7 @@ jobs:
 
           android {
               namespace 'com.watersortjungle.app'
+
               compileSdk 35
 
               defaultConfig {
@@ -145,10 +168,12 @@ jobs:
           <resources>
               <style name="AppTheme"
                   parent="android:style/Theme.Material.Light.NoActionBar">
+
                   <item name="android:fontFamily">sans</item>
                   <item name="android:windowLightStatusBar">true</item>
                   <item name="android:statusBarColor">#FFFFFF</item>
                   <item name="android:navigationBarColor">#000000</item>
+
               </style>
           </resources>
           EOF
@@ -171,6 +196,7 @@ jobs:
                   super.onCreate(savedInstanceState);
 
                   webView = new WebView(this);
+
                   setContentView(webView);
 
                   WebSettings settings = webView.getSettings();
@@ -178,6 +204,7 @@ jobs:
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setDatabaseEnabled(true);
+
                   settings.setAllowFileAccess(true);
                   settings.setAllowContentAccess(true);
                   settings.setAllowFileAccessFromFileURLs(true);
@@ -196,6 +223,7 @@ jobs:
 
               @Override
               public void onBackPressed() {
+
                   if (webView != null && webView.canGoBack()) {
                       webView.goBack();
                   } else {
@@ -205,57 +233,79 @@ jobs:
           }
           EOF
 
-      - name: Find and extract HTML ZIP
+      - name: Find HTML ZIP
         shell: bash
         run: |
           set -e
 
-          ZIP_FILE=$(find . -maxdepth 3 -type f -iname "*.zip" \
+          echo "=========================================="
+          echo "SEARCHING FOR HTML ZIP"
+          echo "=========================================="
+
+          ZIP_FILE=$(find . -maxdepth 3 -type f \
+            \( -iname "*.zip" -o -iname "*.ZIP" \) \
             ! -path "./android-wrapper/*" \
             | head -n 1 || true)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: HTML ZIP not found."
+            echo "ERROR: HTML ZIP was not found."
             exit 1
           fi
 
-          echo "Using ZIP: $ZIP_FILE"
+          echo "ZIP FOUND:"
+          echo "$ZIP_FILE"
 
           rm -rf website-files
+
           mkdir -p website-files
 
           unzip -o "$ZIP_FILE" -d website-files
 
-      - name: Put HTML game inside APK
+      - name: Copy HTML game into APK
         shell: bash
         run: |
           set -e
 
+          echo "=========================================="
+          echo "PUTTING GAME INSIDE APK"
+          echo "=========================================="
+
           INDEX_FILE=$(find website-files \
-            -type f -iname "index.html" | head -n 1 || true)
+            -type f \
+            -iname "index.html" \
+            | head -n 1 || true)
 
           if [ -z "$INDEX_FILE" ]; then
-            echo "ERROR: index.html not found inside ZIP."
-            exit 1
+              echo "ERROR: index.html not found inside ZIP."
+              exit 1
           fi
 
           WEBSITE_ROOT=$(dirname "$INDEX_FILE")
 
-          echo "Game files found in: $WEBSITE_ROOT"
+          echo "GAME ROOT:"
+          echo "$WEBSITE_ROOT"
 
           cp -R "$WEBSITE_ROOT"/. \
             android-wrapper/app/src/main/assets/
 
-          test -f android-wrapper/app/src/main/assets/index.html
+          if [ ! -f android-wrapper/app/src/main/assets/index.html ]; then
+              echo "ERROR: index.html was not copied."
+              exit 1
+          fi
 
           echo ""
-          echo "Files that will be included inside APK:"
-          find android-wrapper/app/src/main/assets -type f | sort
+          echo "GAME FILES INSIDE APK:"
+          find android-wrapper/app/src/main/assets \
+            -type f | sort
 
-      - name: Generate release signing key
+      - name: Create release signing key
         shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "CREATING RELEASE KEY"
+          echo "=========================================="
 
           keytool -genkeypair \
             -v \
@@ -270,20 +320,23 @@ jobs:
 
           cp release-key.jks android-wrapper/release-key.jks
 
-          echo "Release signing key created."
-
-      - name: Create Gradle wrapper
+      - name: Install Gradle
         shell: bash
         run: |
           set -e
 
           cd android-wrapper
+
           gradle wrapper --gradle-version 8.7
 
-      - name: Build signed Release APK
+      - name: Build Release APK
         shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "BUILDING SIGNED RELEASE APK"
+          echo "=========================================="
 
           cd android-wrapper
 
@@ -296,11 +349,13 @@ jobs:
         run: |
           set -e
 
-          cp android-wrapper/app/build/outputs/apk/release/app-release.apk \
+          cp \
+            android-wrapper/app/build/outputs/apk/release/app-release.apk \
             Water-Sort-Jungle-Release-Signed.apk
 
+          echo ""
           echo "=========================================="
-          echo "SIGNED RELEASE APK CREATED"
+          echo "FINAL APK"
           echo "=========================================="
 
           ls -lh Water-Sort-Jungle-Release-Signed.apk
@@ -310,11 +365,18 @@ jobs:
         run: |
           set -e
 
-          $ANDROID_HOME/build-tools/35.0.0/apksigner verify \
+          echo "=========================================="
+          echo "VERIFYING SIGNATURE"
+          echo "=========================================="
+
+          /usr/local/lib/android/sdk/build-tools/35.0.0/apksigner \
+            verify \
             --verbose \
             Water-Sort-Jungle-Release-Signed.apk
 
-      - name: Upload final signed APK
+          echo "SIGNATURE VERIFIED SUCCESSFULLY."
+
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
           name: Water-Sort-Jungle-Release-Signed-APK
@@ -324,6 +386,6 @@ jobs:
       - name: Upload signing key backup
         uses: actions/upload-artifact@v4
         with:
-          name: Water-Sort-Jungle-Signing-Key-BACKUP
+          name: Water-Sort-Jungle-Signing-Key
           path: release-key.jks
           if-no-files-found: error
